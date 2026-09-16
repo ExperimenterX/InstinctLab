@@ -1,18 +1,22 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client"],
-    "paths": {
-      "@/*": ["./src/*"],
-      "@instinct/lab-schema": ["../../packages/lab-schema/src/index.ts"],
-      "@instinct/lab-sim": ["../../packages/lab-sim/src/index.ts"],
-      "@instinct/lab-client": ["../../packages/lab-client/src/index.ts"],
-      "@instinct/lab-client/react": ["../../packages/lab-client/src/react/index.ts"],
-      "@instinct/lab-renderers": ["../../packages/lab-renderers/src/index.ts"],
-      "@instinct/shared": ["../../packages/shared/src/index.ts"]
-    }
+    "types": ["vite/client", "node"],
+    "paths": { "@/*": ["./src/*"] },
+    "baseUrl": "."
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "vite.config.ts"]
 }

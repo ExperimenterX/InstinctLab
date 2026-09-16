@@ -1,3 +1,7 @@
+> ⚠️ **Not the current scope.** We are building the MVP first — see [`MVP.md`](MVP.md),
+> which overrides this document wherever they disagree. The product thinking here still stands;
+> the scope and stack details do not.
+
 # 06 — Ownership & working agreement
 
 Three owners, three disjoint slices, one shared contract. Nobody edits anybody else's folder.

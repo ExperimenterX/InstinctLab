@@ -1,42 +1,115 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 /**
- * Vite + React SPA. No SSR, no file-system router, no server framework.
+ * Dev-only AI endpoint.
  *
- * Why not a meta-framework (doc adr/0002): a lab is a client-side canvas application. Server
- * rendering buys nothing — there is no meaningful first paint before the simulation compiles —
- * and it costs a hydration pass, a heavier dev loop, and an awkward seam with the API service.
+ * The API key is read here, in the Node side of Vite, and never reaches the bundle. That is the
+ * whole reason this middleware exists instead of calling Anthropic from the browser — a key in
+ * client code is a key on someone else's machine.
  *
- * NOTE for the frontend owner: HMR is a hazard here, not just a convenience. A hot update that
- * remounts the canvas resets a running simulation mid-experiment. Keep the runtime bundle
- * (SimCore, Clock, stores) behind a module-scope singleton keyed by sessionId so an HMR cycle
- * re-renders the shell without rebuilding the sim.
+ * This is a prototype stand-in for the real backend service. When the Python API lands, delete
+ * this plugin and point the client's base URL at it; nothing else in `src/` changes, because the
+ * client only ever talks to `POST /api/generate`.
  */
+function aiDevEndpoint(): Plugin {
+  return {
+    name: "instinct-ai-dev-endpoint",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/api/generate", async (req, res) => {
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.end(JSON.stringify({ error: "POST only" }));
+          return;
+        }
+
+        const key = process.env["ANTHROPIC_API_KEY"];
+        if (!key) {
+          res.statusCode = 503;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              error: "no_api_key",
+              message:
+                "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add a key, or use the example lab.",
+            }),
+          );
+          return;
+        }
+
+        try {
+          const chunks: Buffer[] = [];
+          for await (const c of req) chunks.push(c as Buffer);
+          const { concept } = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+            concept?: string;
+          };
+
+          if (!concept || concept.trim().length < 3) {
+            res.statusCode = 400;
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ error: "bad_concept" }));
+            return;
+          }
+
+          // Imported lazily so a missing dependency doesn't break the whole dev server.
+          const [{ default: Anthropic }, { SYSTEM_PROMPT, userTurn }] = await Promise.all([
+            import("@anthropic-ai/sdk"),
+            import("./src/ai/prompt.js"),
+          ]);
+
+          const client = new Anthropic({ apiKey: key });
+
+          const message = await client.messages.create({
+            model: "claude-opus-5",
+            max_tokens: 8000,
+            // On these models: no temperature/top_p (400), no thinking.budget_tokens (400).
+            // Depth is controlled by output_config.effort.
+            thinking: { type: "adaptive" },
+            output_config: { effort: "high" },
+            system: [
+              {
+                type: "text",
+                text: SYSTEM_PROMPT,
+                // Stable prefix — the concept goes in the user turn, after this breakpoint, so
+                // repeat generations read the cache instead of re-paying for the prompt.
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            messages: [{ role: "user", content: userTurn(concept) }],
+          });
+
+          // A refusal is a 200 with empty/partial content, not an exception.
+          if (message.stop_reason === "refusal") {
+            res.statusCode = 422;
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ error: "refused" }));
+            return;
+          }
+
+          // Thinking blocks also arrive in `content`; keep only the text ones.
+          const text = message.content
+            .flatMap((b) => (b.type === "text" ? [b.text] : []))
+            .join("");
+
+          res.statusCode = 200;
+          res.setHeader("content-type", "application/json");
+          // Raw model text — the client parses and validates it. Deliberate: the parsing layer
+          // has to survive real model output, so we don't hide it behind a server-side parse.
+          res.end(JSON.stringify({ raw: text, usage: message.usage }));
+        } catch (e) {
+          server.config.logger.error(`[ai] ${String(e)}`);
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "upstream", message: String(e) }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    /**
-     * COOP/COEP enable SharedArrayBuffer, which lets the sim run in a Worker for heavy labs
-     * (doc 04). Without them `createClock` silently falls back to the rAF backend — correct,
-     * just capped lower. This is one line here and a genuine fight in a meta-framework.
-     */
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-    },
-    proxy: {
-      /** Proxy to the API service in dev so the browser sees one origin and CORS stays simple. */
-      "/api": {
-        target: process.env["INSTINCT_API_URL"] ?? "http://localhost:8787",
-        changeOrigin: true,
-      },
-    },
-  },
-  worker: { format: "es" },
-  build: {
-    target: "es2022",
-    sourcemap: true,
-  },
+  plugins: [react(), aiDevEndpoint()],
+  server: { port: 5173 },
+  build: { target: "es2022", sourcemap: true },
 });

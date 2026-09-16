@@ -1,3 +1,5 @@
+> **Building the MVP?** Start with [`docs/MVP.md`](docs/MVP.md) — it is the current scope.
+
 # Instinct Lab
 
 > Don't just explain it to me. Give me something I can play with until I understand it.

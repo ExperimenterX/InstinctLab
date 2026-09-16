@@ -1,3 +1,7 @@
+> ⚠️ **Not the current scope.** We are building the MVP first — see [`MVP.md`](MVP.md),
+> which overrides this document wherever they disagree. The product thinking here still stands;
+> the scope and stack details do not.
+
 # 07 — Definition of done
 
 ## Per-session gate (every owner, every working session)
