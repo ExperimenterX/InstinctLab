@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "paths": {
+      "@instinct/lab-schema": ["./packages/lab-schema/src/index.ts"],
+      "@instinct/lab-sim": ["./packages/lab-sim/src/index.ts"],
+      "@instinct/lab-client": ["./packages/lab-client/src/index.ts"],
+      "@instinct/lab-renderers": ["./packages/lab-renderers/src/index.ts"],
+      "@instinct/ai-core": ["./packages/ai-core/src/index.ts"],
+      "@instinct/persistence": ["./packages/persistence/src/index.ts"],
+      "@instinct/shared": ["./packages/shared/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next"]
+}

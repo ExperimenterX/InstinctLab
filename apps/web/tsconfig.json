@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@instinct/lab-schema": ["../../packages/lab-schema/src/index.ts"],
+      "@instinct/lab-sim": ["../../packages/lab-sim/src/index.ts"],
+      "@instinct/lab-client": ["../../packages/lab-client/src/index.ts"],
+      "@instinct/lab-client/react": ["../../packages/lab-client/src/react/index.ts"],
+      "@instinct/lab-renderers": ["../../packages/lab-renderers/src/index.ts"],
+      "@instinct/shared": ["../../packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}
