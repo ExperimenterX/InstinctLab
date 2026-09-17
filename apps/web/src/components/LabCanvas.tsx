@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { CompiledPlot, DrawOptions } from "../canvas/plot.js";
-import { drawPlot } from "../canvas/plot.js";
+import type { Stage } from "../canvas/stage.js";
+import type { RenderCtx } from "../canvas/types.js";
+import { drawStage } from "../canvas/stage.js";
 import type { LabStore } from "../state/labStore.js";
 import type { Mode } from "../canvas/theme.js";
 
@@ -21,17 +22,17 @@ export function LabCanvas({
   marker,
   dimmed = false,
 }: {
-  plot: CompiledPlot;
+  plot: Stage;
   store: LabStore;
   mode: Mode;
-  marker?: DrawOptions["marker"];
+  marker?: RenderCtx["marker"];
   dimmed?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   // Live values the draw loop reads. Writing a ref does not re-render.
-  const overlay = useRef<{ marker: DrawOptions["marker"]; dimmed: boolean; mode: Mode }>({
+  const overlay = useRef<{ marker: RenderCtx["marker"]; dimmed: boolean; mode: Mode }>({
     marker, dimmed, mode,
   });
   overlay.current = { marker, dimmed, mode };
@@ -69,7 +70,7 @@ export function LabCanvas({
     const frame = () => {
       if (disposed) return;
       const { marker: mk, dimmed: dim, mode: md } = overlay.current;
-      const markerKey = mk ? `${mk.kind}:${mk.y}:${mk.label}` : "";
+      const markerKey = mk ? `${mk.kind}:${mk.value}:${mk.label}` : "";
       const v = store.version();
 
       // Only redraw when something actually changed. A static lab costs nothing, which keeps
@@ -79,7 +80,7 @@ export function LabCanvas({
         lastMode = md;
         lastMarkerKey = markerKey;
         try {
-          drawPlot(ctx, plot, cssW, cssH, { params: store.get(), mode: md, marker: mk, dimmed: dim });
+          drawStage(plot, ctx, cssW, cssH, { params: store.get(), mode: md, marker: mk, dimmed: dim });
         } catch (e) {
           // Contained at the frame boundary: freeze the last good frame rather than killing the
           // session. The learner can still read the knobs and the question.

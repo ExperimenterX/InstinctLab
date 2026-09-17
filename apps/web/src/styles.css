@@ -224,3 +224,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ── node gallery ────────────────────────────────────────────────────────── */
+.node-gallery {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 18px; font-size: 12px; color: var(--muted);
+}
+.node-gallery a {
+  color: var(--ink-2); text-decoration: none;
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px;
+}
+.node-gallery a:hover { color: var(--ink); border-color: var(--accent); }

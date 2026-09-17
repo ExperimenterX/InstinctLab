@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import type { CompiledPlot } from "../canvas/plot.js";
-import { readObservables } from "../canvas/plot.js";
+import type { Stage } from "../canvas/stage.js";
+import { observableRange, readObservables } from "../canvas/stage.js";
 import type { LabStore } from "../state/labStore.js";
 import { formatValue } from "./Readouts.js";
 
@@ -25,7 +25,7 @@ export function PredictPanel({
   onResolved,
   outcome,
 }: {
-  plot: CompiledPlot;
+  plot: Stage;
   store: LabStore;
   onResolved: (o: PredictionOutcome) => void;
   outcome: PredictionOutcome | null;
@@ -34,7 +34,8 @@ export function PredictPanel({
   const pred = spec.prediction;
   const observable = spec.observables.find((o) => o.id === pred.observable_id)!;
 
-  const [lo, hi] = spec.y_domain;
+  // Range comes from sweeping the param space, never from the answer — see observableRange.
+  const [lo, hi] = useMemo(() => observableRange(plot, pred.observable_id), [plot, pred]);
   const [guess, setGuess] = useState(() => (lo + hi) / 2);
 
   // Computed once, at the configuration the question names — not from the learner's current knobs.

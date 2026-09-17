@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { CompiledPlot } from "../canvas/plot.js";
-import { readObservables } from "../canvas/plot.js";
+import type { Stage } from "../canvas/stage.js";
+import { readObservables } from "../canvas/stage.js";
 import type { LabStore } from "../state/labStore.js";
 import type { Observable } from "../spec/schema.js";
 
@@ -13,7 +13,7 @@ import type { Observable } from "../spec/schema.js";
  */
 const SAMPLE_MS = 100;
 
-export function Readouts({ plot, store }: { plot: CompiledPlot; store: LabStore }) {
+export function Readouts({ plot, store }: { plot: Stage; store: LabStore }) {
   const [values, setValues] = useState<Record<string, number>>(() =>
     readObservables(plot, store.get()),
   );

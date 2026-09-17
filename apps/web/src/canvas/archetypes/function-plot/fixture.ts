@@ -1,21 +1,16 @@
-import type { LabSpec } from "./schema.js";
-
 /**
- * A hand-written lab, so the app is fully usable with no API key.
+ * A complete lab using this node, so it can be spun up standalone at /node/function-plot.
  *
- * It also serves as the development fixture: the canvas, knobs, prediction, and quiz were all
- * built against this before the model was wired in. Keep it valid — `parseLabSpec` runs over it
- * in the smoke test, so if the schema changes this breaks first.
+ * Untyped on purpose: it goes through `parseLabSpec` exactly like model output does, so the
+ * fixture proves the whole path (schema → node config → expression compile → render) rather than
+ * type-asserting its way past it. If the schema changes, this is the first thing that breaks —
+ * which is the point.
  */
-export const EXAMPLE_SPEC: LabSpec = {
+export const FUNCTION_PLOT_FIXTURE = {
   title: "Carrying Capacity",
   caption: "Two predictions of the same colony. Only one is bounded.",
   teaching_angle:
     "Growth rate sets how fast the ceiling is reached, not how high it is — the environment decides the ceiling.",
-  x_label: "Hours",
-  y_label: "Population",
-  x_domain: [0, 48],
-  y_domain: [0, 1000],
   params: [
     {
       id: "growth_rate",
@@ -36,20 +31,6 @@ export const EXAMPLE_SPEC: LabSpec = {
       explain: "How much life the environment can sustain",
     },
   ],
-  series: [
-    {
-      label: "Actual (bounded)",
-      color: "series-1",
-      style: "line",
-      expr: "capacity / (1 + (capacity / 10 - 1) * exp(0 - growth_rate * x))",
-    },
-    {
-      label: "If growth never slowed",
-      color: "series-2",
-      style: "dashed",
-      expr: "min(10 * exp(growth_rate * x), 1000)",
-    },
-  ],
   observables: [
     {
       id: "pop_at_24h",
@@ -59,6 +40,29 @@ export const EXAMPLE_SPEC: LabSpec = {
       expr: "capacity / (1 + (capacity / 10 - 1) * exp(0 - growth_rate * 24))",
     },
   ],
+  stage: {
+    archetype: "function-plot",
+    config: {
+      x_label: "Hours",
+      y_label: "Population",
+      x_domain: [0, 48],
+      y_domain: [0, 1000],
+      series: [
+        {
+          label: "Actual (bounded)",
+          color: "series-1",
+          style: "line",
+          expr: "capacity / (1 + (capacity / 10 - 1) * exp(0 - growth_rate * x))",
+        },
+        {
+          label: "If growth never slowed",
+          color: "series-2",
+          style: "dashed",
+          expr: "min(10 * exp(growth_rate * x), 1000)",
+        },
+      ],
+    },
+  },
   prediction: {
     question: "Push the growth rate to its maximum. What is the population at 24 hours?",
     observable_id: "pop_at_24h",
@@ -102,4 +106,4 @@ export const EXAMPLE_SPEC: LabSpec = {
       why: "Unbounded exponential growth is the intuition that fails, which is why it is drawn.",
     },
   ],
-};
+} as const;

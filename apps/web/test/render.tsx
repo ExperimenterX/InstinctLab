@@ -6,8 +6,14 @@
  * frame, and a missing direct label — the failures that would show up as an empty or wrong plot.
  */
 import { renderToString } from "react-dom/server";
-import { compilePlot, drawPlot, readObservables } from "../src/canvas/plot.js";
-import { EXAMPLE_SPEC } from "../src/spec/fixture.js";
+import { compileStage, drawStage, observableRange, readObservables } from "../src/canvas/stage.js";
+import { FUNCTION_PLOT_FIXTURE } from "../src/canvas/archetypes/function-plot/fixture.js";
+import { parseLabSpec } from "../src/spec/parse.js";
+
+const _p = parseLabSpec(JSON.stringify(FUNCTION_PLOT_FIXTURE));
+if (!_p.ok) { console.error("fixture does not validate", _p.issues); process.exit(1); }
+const EXAMPLE_SPEC = _p.spec;
+const CFG = EXAMPLE_SPEC.stage.config as { series: { label: string }[]; x_label: string; y_label: string };
 import { createLabStore } from "../src/state/labStore.js";
 import { KnobPanel } from "../src/components/KnobPanel.js";
 import { Readouts } from "../src/components/Readouts.js";
@@ -57,13 +63,13 @@ function stubCtx(w: number, h: number) {
 
 console.log("\n== canvas: compile + draw ==");
 const W = 900, H = 520;
-const plot = compilePlot(EXAMPLE_SPEC);
-ok("compiles every series", plot.series.length === EXAMPLE_SPEC.series.length);
+const plot = compileStage(EXAMPLE_SPEC);
+ok("compiles every series", (plot.compiled as any).series.length === CFG.series.length);
 ok("compiles every observable", plot.observables.length === EXAMPLE_SPEC.observables.length);
 
 const store = createLabStore(EXAMPLE_SPEC);
 const a = stubCtx(W, H);
-drawPlot(a.ctx, plot, W, H, { params: store.get(), mode: "light" });
+drawStage(plot, a.ctx, W, H, { params: store.get(), mode: "light" });
 
 const pathPts = a.calls.filter((c) => c.op === "moveTo" || c.op === "lineTo");
 ok("draws a path", pathPts.length > 200, `${pathPts.length} points`);
@@ -72,17 +78,17 @@ ok("all points inside the frame",
    pathPts.every((c) => c.args[0]! >= 0 && c.args[0]! <= W && c.args[1]! >= 0 && c.args[1]! <= H));
 
 // The relief rule from the palette validation: every series must be directly labelled.
-for (const s of EXAMPLE_SPEC.series) {
+for (const s of CFG.series) {
   const labelled = a.texts.some((t) => s.label.startsWith(t.replace(/…$/, "")));
   ok(`direct label present: "${s.label}"`, labelled);
 }
 ok("axis labels drawn",
-   a.texts.includes(EXAMPLE_SPEC.x_label) && a.texts.includes(EXAMPLE_SPEC.y_label));
+   a.texts.includes(CFG.x_label) && a.texts.includes(CFG.y_label));
 
 // Dragging a knob must change the geometry — this is the whole product in one assertion.
 store.set("capacity", 900);
 const b = stubCtx(W, H);
-drawPlot(b.ctx, plot, W, H, { params: store.get(), mode: "light" });
+drawStage(plot, b.ctx, W, H, { params: store.get(), mode: "light" });
 const before = a.calls.filter((c) => c.op === "lineTo").map((c) => c.args[1]);
 const after = b.calls.filter((c) => c.op === "lineTo").map((c) => c.args[1]);
 ok("moving a knob changes the curve",
@@ -137,6 +143,20 @@ ok("answers are not in the markup before submitting",
 const canvasHtml = tryRender("LabCanvas",
   <LabCanvas plot={plot} store={store} mode="light" />);
 ok("canvas element present", canvasHtml.includes("<canvas"));
+
+// The prediction slider must not hand over the answer.
+console.log("\n== prediction range does not leak the answer ==");
+store.reset();
+const [rlo, rhi] = observableRange(plot, EXAMPLE_SPEC.prediction.observable_id);
+const truth = (() => {
+  const at = { ...store.get(), ...EXAMPLE_SPEC.prediction.at_params };
+  return readObservables(plot, at)[EXAMPLE_SPEC.prediction.observable_id]!;
+})();
+ok("range is finite and ordered", Number.isFinite(rlo) && Number.isFinite(rhi) && rlo < rhi,
+   `[${rlo.toFixed(1)}, ${rhi.toFixed(1)}]`);
+ok("range contains the answer", truth >= rlo && truth <= rhi, `truth ${truth.toFixed(1)}`);
+ok("answer is not the range midpoint (would be a giveaway)",
+   Math.abs(truth - (rlo + rhi) / 2) > (rhi - rlo) * 0.02);
 
 console.log(`\n${fail.length === 0 ? "ALL PASS" : `${fail.length} FAILED: ${fail.join(", ")}`}\n`);
 process.exit(fail.length === 0 ? 0 : 1);

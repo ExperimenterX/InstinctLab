@@ -1,21 +1,23 @@
 import { LabSpecSchema, type LabSpec } from "./schema.js";
 import { tryCompile } from "../expr/compile.js";
+import { getNode, nodeIds } from "../canvas/registry.js";
 
 /**
  * AI response → validated LabSpec.
  *
- * Three layers, in order, because each catches a different class of failure:
+ * Four layers, in order, because each catches a different class of failure:
  *
- *   1. EXTRACT   pull JSON out of whatever the model actually returned (fences, preamble)
- *   2. SCHEMA    Zod — shape and bounds
- *   3. SEMANTIC  the things Zod cannot know: do expressions compile, do ids resolve, and does
- *                the learner's knob actually change anything
+ *   1. EXTRACT  pull JSON out of whatever the model actually returned (fences, preamble, prose)
+ *   2. SCHEMA   Zod on the shared fields — shape and bounds
+ *   3. NODE     hand `stage.config` to the node that will render it; the node validates its own
+ *               config and reports which params it reads
+ *   4. UNIVERSAL the rules that hold for every node: ids resolve, and at least one knob is live
  *
- * Layer 3 is the one that matters most and the one a naive implementation skips. A spec can be
- * perfectly well-formed and still be a dead lab — if no expression reads a param, the knob is
- * decoration and there is nothing to discover. We reject that.
+ * Layer 4 is the one a naive implementation skips, and the one that matters most. A spec can be
+ * perfectly well-formed and still be a dead lab — if nothing depends on a knob, the learner has a
+ * picture rather than something to play with. We reject that outright.
  *
- * Mechanical repairs are applied where the fix is unambiguous (clamp a default into its own
+ * Mechanical repairs are applied where the fix is unambiguous (clamping a default into its own
  * range). We never invent content: a missing caption goes back to the model, because guessing it
  * ships a lab that looks fine and teaches nothing.
  */
@@ -34,12 +36,11 @@ export type ParseResult =
 
 /**
  * Models wrap JSON in fences, add a sentence before it, or both. Find the outermost balanced
- * object rather than regexing for `{.*}` — a nested brace inside a string breaks the naive
- * version, and it fails at parse time with a useless message.
+ * object rather than regexing for `{.*}` — a brace inside a string breaks the naive version, and
+ * it fails later with a useless message.
  */
 export function extractJson(raw: string): string | null {
   const text = raw.trim();
-
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
   const candidate = fenced?.[1]?.trim() ?? text;
 
@@ -57,35 +58,24 @@ export function extractJson(raw: string): string | null {
     if (c === '"') { inString = !inString; continue; }
     if (inString) continue;
     if (c === "{") depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0) return candidate.slice(start, i + 1);
-    }
+    else if (c === "}" && --depth === 0) return candidate.slice(start, i + 1);
   }
   return null;
 }
 
-// ── Layers 2 and 3 ────────────────────────────────────────────────────────────────────────────
+// ── Layers 2–4 ────────────────────────────────────────────────────────────────────────────────
 
 export function parseLabSpec(raw: string): ParseResult {
   const json = extractJson(raw);
   if (!json) {
-    return {
-      ok: false,
-      raw,
-      issues: [{ path: "$", message: "No JSON object found in the response.", severity: "error" }],
-    };
+    return { ok: false, raw, issues: [{ path: "$", message: "No JSON object found in the response.", severity: "error" }] };
   }
 
   let data: unknown;
   try {
     data = JSON.parse(json);
   } catch (e) {
-    return {
-      ok: false,
-      raw,
-      issues: [{ path: "$", message: `Malformed JSON: ${String(e)}`, severity: "error" }],
-    };
+    return { ok: false, raw, issues: [{ path: "$", message: `Malformed JSON: ${String(e)}`, severity: "error" }] };
   }
 
   const parsed = LabSpecSchema.safeParse(data);
@@ -105,14 +95,6 @@ export function parseLabSpec(raw: string): ParseResult {
   const errors: ParseIssue[] = [];
   const warnings: ParseIssue[] = [];
   const repairs: string[] = [];
-
-  // — domains —
-  if (spec.x_domain[0] >= spec.x_domain[1]) {
-    errors.push({ path: "x_domain", message: "x_domain must be increasing.", severity: "error" });
-  }
-  if (spec.y_domain[0] >= spec.y_domain[1]) {
-    errors.push({ path: "y_domain", message: "y_domain must be increasing.", severity: "error" });
-  }
 
   // — params —
   const paramIds = spec.params.map((p) => p.id);
@@ -138,46 +120,49 @@ export function parseLabSpec(raw: string): ParseResult {
     }
   }
 
-  // — expressions —
-  // Series may read `x`; observables may not (they resolve to a single number).
-  const seriesVars = ["x", ...paramIds];
   const referencedParams = new Set<string>();
 
-  for (const [i, s] of spec.series.entries()) {
-    const r = tryCompile(s.expr, seriesVars);
-    if (!r.ok) {
-      errors.push({ path: `series.${i}.expr`, message: r.error, severity: "error" });
-    } else {
-      for (const name of r.result.referenced) {
-        if (name !== "x") referencedParams.add(name);
-      }
-      if (!r.result.referenced.has("x")) {
-        warnings.push({
-          path: `series.${i}.expr`,
-          message: `"${s.label}" does not use x — it will draw a flat line.`,
-          severity: "warning",
-        });
-      }
-    }
-  }
-
+  // — observables (shared: param ids only, no x) —
   for (const [i, o] of spec.observables.entries()) {
     const r = tryCompile(o.expr, paramIds);
-    if (!r.ok) {
-      errors.push({ path: `observables.${i}.expr`, message: r.error, severity: "error" });
+    if (!r.ok) errors.push({ path: `observables.${i}.expr`, message: r.error, severity: "error" });
+    else for (const n of r.result.referenced) referencedParams.add(n);
+  }
+
+  // — Layer 3: the node validates its own config —
+  const node = getNode(spec.stage.archetype);
+  if (!node) {
+    errors.push({
+      path: "stage.archetype",
+      message: `Unknown archetype "${spec.stage.archetype}". Available: ${nodeIds().join(", ")}`,
+      severity: "error",
+    });
+  } else {
+    const cfg = node.configSchema.safeParse(spec.stage.config);
+    if (!cfg.success) {
+      for (const i of cfg.error.issues) {
+        errors.push({
+          path: `stage.config.${i.path.join(".") || "$"}`,
+          message: i.message,
+          severity: "error",
+        });
+      }
     } else {
-      for (const name of r.result.referenced) referencedParams.add(name);
+      spec.stage.config = cfg.data;
+      const a = node.analyze(cfg.data as never, { paramIds });
+      for (const m of a.errors) errors.push({ path: "stage.config", message: m, severity: "error" });
+      for (const m of a.warnings) warnings.push({ path: "stage.config", message: m, severity: "warning" });
+      for (const n of a.referencedParams) referencedParams.add(n);
     }
   }
 
-  // — THE RULE THAT MAKES IT A LAB —
-  // If nothing reads a param, the knob does nothing and there is no lab to play with.
+  // — Layer 4: THE RULE THAT MAKES IT A LAB —
   if (referencedParams.size === 0) {
     errors.push({
-      path: "series/observables",
+      path: "stage/observables",
       message:
-        "No expression references any param, so the knobs would do nothing. At least one series " +
-        "or observable must depend on a param.",
+        "Nothing references any param, so the knobs would do nothing. At least one series or " +
+        "observable must depend on a param.",
       severity: "error",
     });
   }
@@ -185,7 +170,7 @@ export function parseLabSpec(raw: string): ParseResult {
     if (!referencedParams.has(p.id)) {
       warnings.push({
         path: `params.${p.id}`,
-        message: `"${p.label}" is never used by any expression — that knob is inert.`,
+        message: `"${p.label}" is never used — that knob is inert.`,
         severity: "warning",
       });
     }
@@ -229,7 +214,6 @@ export function parseLabSpec(raw: string): ParseResult {
   return { ok: true, spec, repairs, warnings };
 }
 
-/** Human-readable summary, for the retry panel. */
 export function formatIssues(issues: ParseIssue[]): string {
   return issues.map((i) => `${i.path}: ${i.message}`).join("\n");
 }

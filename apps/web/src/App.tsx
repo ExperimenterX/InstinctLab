@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { compilePlot } from "./canvas/plot.js";
+import { compileStage } from "./canvas/stage.js";
 import { getTheme, prefersDark, type Mode } from "./canvas/theme.js";
 import { generateLab } from "./ai/generate.js";
-import { EXAMPLE_SPEC } from "./spec/fixture.js";
-import { formatIssues } from "./spec/parse.js";
+import { FUNCTION_PLOT_FIXTURE } from "./canvas/archetypes/function-plot/fixture.js";
+import { formatIssues, parseLabSpec } from "./spec/parse.js";
+import { NODES } from "./canvas/registry.js";
 import { LabSpecSchema, type LabSpec } from "./spec/schema.js";
 import { clearSession, createLabStore, loadSession, saveSession } from "./state/labStore.js";
 import { LabCanvas } from "./components/LabCanvas.js";
@@ -21,9 +22,32 @@ export function App() {
   const [stage, setStage] = useState<Stage>("explore");
   const [outcome, setOutcome] = useState<PredictionOutcome | null>(null);
 
+  /**
+   * Node gallery. `/node/<id>` mounts that node's own fixture as a complete lab.
+   *
+   * This is how a node gets "spun up" standalone: whoever is building `grid-automaton` opens
+   * /node/grid-automaton and sees their canvas with real knobs, a prediction, and a quiz — with
+   * no API key, no generator, and none of the other nodes finished.
+   */
+  useEffect(() => {
+    const m = /^\/node\/([a-z0-9-]+)$/.exec(window.location.pathname);
+    if (!m) return;
+    const node = NODES.find((n) => n.id === m[1]);
+    if (!node) return;
+    const res = parseLabSpec(JSON.stringify(node.fixtureJson));
+    if (res.ok) {
+      setSpec(res.spec);
+      setConcept(`node: ${node.id}`);
+    } else {
+      // A fixture that drifted out of schema should say so loudly — it is the node's own test.
+      console.error(`[node:${node.id}] fixture does not validate`, res.issues);
+    }
+  }, []);
+
   // Restore a previous session. Re-validated on the way in — a stored spec is untrusted too, and
   // a stale shape should look like "no session" rather than crash the app.
   useEffect(() => {
+    if (window.location.pathname.startsWith("/node/")) return;
     const saved = loadSession();
     if (!saved) return;
     const check = LabSpecSchema.safeParse(saved.spec);
@@ -163,10 +187,21 @@ function ConceptScreen({ onStart }: { onStart: (spec: LabSpec, concept: string) 
       {busy ? (
         <p className="hint">Designing the simulation. This takes a few seconds.</p>
       ) : (
-        <button className="btn-ghost example-link" onClick={() => onStart(EXAMPLE_SPEC, "carrying capacity")}>
+        <button className="btn-ghost example-link" onClick={() => openExample(onStart, setProblem)}>
           or open the example lab →
         </button>
       )}
+
+      {NODES.length > 0 ? (
+        <nav className="node-gallery" aria-label="Canvas nodes">
+          <span>canvas nodes:</span>
+          {NODES.map((n) => (
+            <a key={n.id} href={`/node/${n.id}`} title={n.bestFor}>
+              {n.label}
+            </a>
+          ))}
+        </nav>
+      ) : null}
 
       {problem ? (
         <div className="problem">
@@ -182,6 +217,20 @@ function ConceptScreen({ onStart }: { onStart: (spec: LabSpec, concept: string) 
       ) : null}
     </main>
   );
+}
+
+/**
+ * Opens a node fixture as a real lab. It goes through `parseLabSpec` exactly like model output,
+ * so the example path validates the same code the generator does — a fixture that drifts out of
+ * schema fails here rather than rendering something subtly wrong.
+ */
+function openExample(
+  onStart: (spec: LabSpec, concept: string) => void,
+  setProblem: (p: { title: string; detail: string }) => void,
+): void {
+  const res = parseLabSpec(JSON.stringify(FUNCTION_PLOT_FIXTURE));
+  if (res.ok) onStart(res.spec, FUNCTION_PLOT_FIXTURE.title.toLowerCase());
+  else setProblem({ title: "The bundled example is out of schema.", detail: formatIssues(res.issues) });
 }
 
 // ── Screen 2: the lab ─────────────────────────────────────────────────────────────────────────
@@ -203,14 +252,14 @@ function LabScreen({
 }) {
   // Built once per spec. Rebuilding would reset the lab mid-experiment, so the dependency list
   // here is deliberately just the spec identity.
-  const plot = useMemo(() => compilePlot(spec), [spec]);
+  const plot = useMemo(() => compileStage(spec), [spec]);
   const store = useMemo(() => createLabStore(spec), [spec]);
 
   const observable = spec.observables.find((o) => o.id === spec.prediction.observable_id);
   const frozen = stage === "predict" && !outcome;
 
   const marker = outcome
-    ? ({ y: outcome.actual, label: "actual", kind: "actual" } as const)
+    ? ({ value: outcome.actual, label: "actual", kind: "actual" } as const)
     : undefined;
 
   return (

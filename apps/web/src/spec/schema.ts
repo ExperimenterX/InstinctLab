@@ -1,11 +1,12 @@
 import { z } from "zod";
 
 /**
- * The MVP LabSpec — the contract between the model and the canvas.
+ * The SHARED part of a lab spec — everything that is true regardless of which canvas node
+ * renders it.
  *
- * Deliberately small. One archetype (a function plot), 1–3 knobs, one prediction, three quiz
- * questions. Every bound here is a real bound: model output is untrusted input, and an
- * unclamped sample count or domain is a frozen tab.
+ * `stage.config` is deliberately `unknown` here. The registry validates it against the node's own
+ * `configSchema`, which means **adding a node requires no edit to this file**. That is the
+ * property that lets three people add three nodes without touching shared code.
  */
 
 export const ParamSchema = z.object({
@@ -19,17 +20,6 @@ export const ParamSchema = z.object({
   explain: z.string().min(4).max(80),
 });
 export type Param = z.infer<typeof ParamSchema>;
-
-export const SERIES_COLORS = ["series-1", "series-2", "series-3"] as const;
-
-export const SeriesSchema = z.object({
-  label: z.string().min(1).max(24),
-  /** Arithmetic in `x` and any declared param id. */
-  expr: z.string().min(1).max(400),
-  color: z.enum(SERIES_COLORS),
-  style: z.enum(["line", "dashed"]).default("line"),
-});
-export type Series = z.infer<typeof SeriesSchema>;
 
 export const ObservableSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
@@ -59,23 +49,23 @@ export const QuizItemSchema = z.object({
 });
 export type QuizItem = z.infer<typeof QuizItemSchema>;
 
+/** Which node renders this lab, plus that node's own config. */
+export const StageSchema = z.object({
+  archetype: z.string().min(1).max(40),
+  config: z.unknown(),
+});
+export type Stage = z.infer<typeof StageSchema>;
+
 export const LabSpecSchema = z.object({
   title: z.string().min(2).max(48),
   /** The only prose on screen. Short on purpose. */
   caption: z.string().min(4).max(90),
-  /** The ONE mechanism this lab exists to teach. Must be a mechanism, not a restatement. */
+  /** The ONE mechanism this lab exists to teach — a mechanism, not a restatement. */
   teaching_angle: z.string().min(20).max(160),
-  x_label: z.string().min(1).max(24),
-  y_label: z.string().min(1).max(24),
-  x_domain: z.tuple([z.number().finite(), z.number().finite()]),
-  y_domain: z.tuple([z.number().finite(), z.number().finite()]),
   params: z.array(ParamSchema).min(1).max(3),
-  series: z.array(SeriesSchema).min(1).max(3),
   observables: z.array(ObservableSchema).min(1).max(2),
+  stage: StageSchema,
   prediction: PredictionSchema,
   quiz: z.array(QuizItemSchema).length(3),
 });
 export type LabSpec = z.infer<typeof LabSpecSchema>;
-
-/** The client never needs the answers until it grades, and grading is local in the MVP. */
-export type PublicQuizItem = Omit<QuizItem, "correct_index" | "why">;

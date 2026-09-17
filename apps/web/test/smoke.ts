@@ -1,6 +1,8 @@
 import { compileExpr, tryCompile } from "../src/expr/compile.js";
 import { parseLabSpec, extractJson } from "../src/spec/parse.js";
-import { EXAMPLE_SPEC } from "../src/spec/fixture.js";
+import { FUNCTION_PLOT_FIXTURE } from "../src/canvas/archetypes/function-plot/fixture.js";
+
+const EXAMPLE_SPEC = structuredClone(FUNCTION_PLOT_FIXTURE) as any;
 
 const fail: string[] = [];
 const ok = (name: string, cond: boolean, extra = "") => {
@@ -60,7 +62,7 @@ if (good.ok) {
 
 // The rule that makes it a lab: something must depend on a param.
 const inert = structuredClone(EXAMPLE_SPEC);
-inert.series = [{ label: "flat", color: "series-1", style: "line", expr: "x * 2" }];
+inert.stage.config.series = [{ label: "flat", color: "series-1", style: "line", expr: "x * 2" }];
 inert.observables = [{ id: "z", label: "Z", expr: "42", format: "number", precision: 0 }];
 inert.prediction.observable_id = "z";
 const inertRes = parseLabSpec(JSON.stringify(inert));
@@ -69,7 +71,7 @@ ok("rejects spec where no knob matters", !inertRes.ok,
 
 // Mechanical repair, not invention.
 const needsRepair = structuredClone(EXAMPLE_SPEC);
-needsRepair.params[0]!.default = 999;
+needsRepair.params[0].default = 999;
 const rep = parseLabSpec(JSON.stringify(needsRepair));
 ok("clamps an out-of-range default", rep.ok && rep.repairs.length === 1,
    rep.ok ? rep.repairs.join(";") : "rejected outright");
@@ -81,8 +83,23 @@ ok("rejects dangling observable_id", !parseLabSpec(JSON.stringify(dangling)).ok)
 
 // Bad expression must be caught, not deferred to render time.
 const badExpr = structuredClone(EXAMPLE_SPEC);
-badExpr.series[0]!.expr = "capacity / (1 + nonsense)";
+badExpr.stage.config.series[0].expr = "capacity / (1 + nonsense)";
 ok("rejects unknown name in expression", !parseLabSpec(JSON.stringify(badExpr)).ok);
+
+// Node-model guarantees: the parser rejects an unknown archetype, and routes config
+// validation to the node rather than knowing about series itself.
+console.log("\n== node model ==");
+const unknownNode = structuredClone(EXAMPLE_SPEC) as any;
+unknownNode.stage.archetype = "does-not-exist";
+ok("rejects an unregistered archetype", !parseLabSpec(JSON.stringify(unknownNode)).ok);
+
+const badCfg = structuredClone(EXAMPLE_SPEC) as any;
+badCfg.stage.config.y_domain = [100, 0];
+ok("node rejects a reversed domain", !parseLabSpec(JSON.stringify(badCfg)).ok);
+
+const noSeries = structuredClone(EXAMPLE_SPEC) as any;
+noSeries.stage.config.series = [];
+ok("node config bounds enforced (0 series)", !parseLabSpec(JSON.stringify(noSeries)).ok);
 
 console.log(`\n${fail.length === 0 ? "ALL PASS" : `${fail.length} FAILED: ${fail.join(", ")}`}\n`);
 process.exit(fail.length === 0 ? 0 : 1);
