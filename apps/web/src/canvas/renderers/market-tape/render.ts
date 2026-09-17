@@ -21,8 +21,6 @@ import { MARKET_TAPE_FIXTURE } from "./fixture.js";
  * looks like a price chart will be read as one.
  */
 
-/** Bars are revealed over this long on mount, then the whole path stays up. */
-const REVEAL_SECONDS = 2.2;
 const PANE_GAP = 12;
 const PRICE_FRACTION = 0.62;
 
@@ -117,12 +115,13 @@ export const marketTapeRenderer: CanvasRenderer<MarketTapeConfig> = {
     const eqTop = f.top + priceH + PANE_GAP;
     const eqH = f.h - priceH - PANE_GAP;
 
-    // Reveal on mount so the first impression is motion, then hold the whole path so a knob
-    // shows its complete effect rather than leaking it out over the next few seconds.
-    const shown = Math.max(
-      2,
-      Math.min(path.n, Math.ceil((rc.t / REVEAL_SECONDS) * path.n)),
-    );
+    // The whole path, always.
+    //
+    // A time-based reveal was tried and removed: the canvas host only redraws when a knob moves,
+    // so `rc.t` never advances and the reveal froze two bars in. Drawing everything is also the
+    // better behaviour — a knob should show its complete effect at once, not leak it out over
+    // the next few seconds.
+    const shown = path.n;
 
     if (cfg.note) {
       rc.ctx.fillStyle = rc.theme.muted;
@@ -165,7 +164,7 @@ export const marketTapeRenderer: CanvasRenderer<MarketTapeConfig> = {
     rc.ctx.restore();
 
     xAxis(rc, f, path.n, xAt, eqTop + eqH);
-    chip(rc, f, eqTop + eqH);
+    chip(rc, f);
   },
 
   /**
@@ -242,14 +241,17 @@ function xAxis(
   ctx.fillText("bars", f.left + f.w, bottom + 7);
 }
 
-/** Permanent, not dismissible: a picture shaped like a price chart will be read as one. */
-function chip(rc: RenderCtx, f: Frame, bottom: number): void {
+/**
+ * Permanent, not dismissible: a picture shaped like a price chart will be read as one.
+ * Top right, opposite the note — the bottom-left corner belongs to the x-axis origin label.
+ */
+function chip(rc: RenderCtx, f: Frame): void {
   const { ctx, theme } = rc;
   ctx.fillStyle = theme.muted;
   ctx.font = `10px ${theme.mono}`;
-  ctx.textAlign = "left";
+  ctx.textAlign = "right";
   ctx.textBaseline = "top";
-  ctx.fillText("simulated — not market data", f.left, bottom + 7);
+  ctx.fillText("simulated — not market data", f.left + f.w, f.top - 12);
 }
 
 // ── marks ─────────────────────────────────────────────────────────────────────────────────────

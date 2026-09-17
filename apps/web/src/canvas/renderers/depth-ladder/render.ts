@@ -18,8 +18,6 @@ import { DEPTH_LADDER_FIXTURE } from "./fixture.js";
  * teaches the mechanism better: you choose a depth, and the price follows from it.
  */
 
-const SWEEP_SECONDS = 0.6;
-
 interface DLCompiled extends CompiledStage {
   readonly renderer: "depth-ladder";
   cfg: DepthLadderConfig;
@@ -99,7 +97,9 @@ export const depthLadderRenderer: CanvasRenderer<DepthLadderConfig> = {
 
     const rows = b.n * 2;
     const rowH = f.h / rows;
-    const sweep = Math.max(0, Math.min(1, rc.t / SWEEP_SECONDS));
+    // Fully swept, always — same reason as market-tape: the host redraws on knob changes, not
+    // on a clock, so anything keyed to `rc.t` would freeze at its first frame.
+    const sweep = 1;
     c.view = { top: f.top, rowH, askRows: b.n };
 
     if (cfg.note) {
@@ -260,7 +260,8 @@ function legend(rc: RenderCtx, f: Frame): void {
   ctx.fillStyle = theme.muted;
   ctx.textAlign = "center";
   ctx.fillText("resting size →   click an ask level to buy down to it", f.left + f.w / 2, f.top + f.h + 8);
-  ctx.textAlign = "left";
   ctx.font = `10px ${theme.mono}`;
-  ctx.fillText("simulated — not market data", f.left, f.top + f.h + 22);
+  ctx.textAlign = "right";
+  ctx.fillText("simulated — not market data", f.left + f.w, f.top - 12);
+  ctx.textAlign = "left";
 }
