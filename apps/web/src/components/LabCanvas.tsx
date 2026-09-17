@@ -53,18 +53,28 @@ export function LabCanvas({
     let lastMarkerKey = "";
     let disposed = false;
 
+    /**
+     * Size the BACKING STORE only. The canvas's CSS box is 100%/100% of the wrapper.
+     *
+     * Writing `canvas.style.width = "<px>"` here caused the canvas to creep wider on its own:
+     * the px width fed the grid track's content-based min-size, the track grew, the
+     * ResizeObserver fired, we measured the larger box and set a larger width — a loop with no
+     * user input. `clientWidth` (not getBoundingClientRect) also keeps this integral, so
+     * sub-pixel rounding can't ratchet it upward.
+     */
     const resize = () => {
-      const rect = wrap.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap: 3x on mobile is wasted fill
-      cssW = Math.max(240, Math.floor(rect.width));
-      cssH = Math.max(200, Math.floor(rect.height));
-      canvas.width = Math.floor(cssW * dpr);
-      canvas.height = Math.floor(cssH * dpr);
-      canvas.style.width = `${cssW}px`;
-      canvas.style.height = `${cssH}px`;
+      const w = Math.max(240, wrap.clientWidth);
+      const h = Math.max(200, wrap.clientHeight);
+      if (w === cssW && h === cssH) return;   // idempotent: identical size does no work
+
+      cssW = w;
+      cssH = h;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2); // 3x on mobile is wasted fill
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
       // Handle DPR exactly once, here. Nothing downstream thinks about device pixels.
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      lastVersion = -1; // force a redraw at the new size
+      lastVersion = -1; // force one redraw at the new size
     };
 
     const frame = () => {

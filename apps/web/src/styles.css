@@ -118,7 +118,9 @@ body {
 
 /* ── lab ─────────────────────────────────────────────────────────────────── */
 .lab {
-  flex: 1; display: grid; grid-template-columns: 1fr 320px;
+  /* minmax(0, …) not 1fr: a bare 1fr takes its min-size from content, so a sized canvas
+     inside it can push the track wider every frame. See LabCanvas. */
+  flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px; padding: 16px; align-items: start;
 }
 .stage { display: flex; flex-direction: column; gap: 10px; }
@@ -128,9 +130,13 @@ body {
 .canvas-wrap {
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
   /* The canvas dominates: the learner should read the picture before any text. */
-  height: clamp(320px, 62vh, 680px); overflow: hidden;
+  height: clamp(320px, 62vh, 680px); overflow: hidden; width: 100%; min-width: 0;
 }
-.canvas-wrap canvas { display: block; }
+.canvas-wrap canvas {
+  /* Layout is CSS-driven. JS only sets the backing-store size (canvas.width/height), never
+     canvas.style.width — writing a px style here reintroduces the growth loop. */
+  display: block; width: 100%; height: 100%;
+}
 
 .phases { display: flex; gap: 6px; }
 .phase {

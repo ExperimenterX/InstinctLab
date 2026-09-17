@@ -1,12 +1,12 @@
-import { archetypeMenu } from "../canvas/registry.js";
-import { FUNCTION_PLOT_FIXTURE } from "../canvas/archetypes/function-plot/fixture.js";
+import { rendererMenu } from "../canvas/registry.js";
+import { FUNCTION_PLOT_FIXTURE } from "../canvas/renderers/function-plot/fixture.js";
 
 /**
  * The composer prompt. Imported by the Vite dev middleware (Node side), never by the browser.
  *
- * The archetype menu is generated from the node registry, so the prompt cannot offer an archetype
- * that doesn't render. Register a node and it appears here automatically — that is the mechanism
- * that keeps the prompt and the canvas from drifting apart as people add nodes.
+ * The renderer menu is generated from the registry, so the prompt cannot offer a renderer
+ * that doesn't draw. Register a renderer and it appears here automatically — that is the mechanism
+ * that keeps the prompt and the canvas from drifting apart as renderers are added.
  *
  * Written for current Claude models, which follow a system prompt closely. That inverts some
  * older habits: no "CRITICAL:" or "YOU MUST", no wall of prohibitions, and one complete worked
@@ -15,7 +15,7 @@ import { FUNCTION_PLOT_FIXTURE } from "../canvas/archetypes/function-plot/fixtur
  */
 
 function menu(): string {
-  return archetypeMenu()
+  return rendererMenu()
     .map((n) => `- "${n.id}" (${n.label}) — ${n.bestFor}`)
     .join("\n");
 }
@@ -40,12 +40,12 @@ Shared fields:
   (<= 80 chars, what the knob physically means).
 - observables: 1-2 read-outs. Each: id, label, expr, format ("number" | "percent" | "currency"),
   precision. An observable expr uses param ids only — no \`x\` — and resolves to one number.
-- stage: { archetype, config } — which canvas renders this lab, and its config.
+- stage: { renderer, config } — which canvas renderer draws this lab, and its config.
 - prediction: question (<= 160), observable_id, at_params (the configuration to jump to before
   asking), tolerance, why_correct (<= 200).
 - quiz: exactly 3 items, each with prompt, options (2-4), correct_index, why.
 
-## Available canvases
+## Available canvas renderers
 
 ${menu()}
 

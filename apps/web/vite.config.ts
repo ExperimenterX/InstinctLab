@@ -1,4 +1,6 @@
-import { defineConfig, type Plugin } from "vite";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 /**
@@ -12,7 +14,29 @@ import react from "@vitejs/plugin-react";
  * this plugin and point the client's base URL at it; nothing else in `src/` changes, because the
  * client only ever talks to `POST /api/generate`.
  */
-function aiDevEndpoint(): Plugin {
+function aiDevEndpoint(apiKeyAtBoot: string): Plugin {
+  /**
+   * Re-read the key per request if it was empty at boot.
+   *
+   * `loadEnv` runs once when the config is evaluated, so a key pasted into .env afterwards would
+   * otherwise need a server restart — and the failure mode is a confusing "no key" response from
+   * a server that is looking at a file which now has one. Reading lazily means paste-and-refresh
+   * works. Once a key is found it is cached, so the normal path touches no disk.
+   */
+  let cached = apiKeyAtBoot;
+  const resolveKey = (root: string): string => {
+    if (cached) return cached;
+    for (const file of [".env.local", ".env"]) {
+      try {
+        const text = readFileSync(resolve(root, file), "utf8");
+        const m = /^\s*ANTHROPIC_API_KEY\s*=\s*(.+)$/m.exec(text);
+        const v = m?.[1]?.trim().replace(/^["']|["']$/g, "");
+        if (v) { cached = v; return cached; }
+      } catch { /* file absent — try the next one */ }
+    }
+    return process.env["ANTHROPIC_API_KEY"] ?? "";
+  };
+
   return {
     name: "instinct-ai-dev-endpoint",
     apply: "serve",
@@ -24,7 +48,7 @@ function aiDevEndpoint(): Plugin {
           return;
         }
 
-        const key = process.env["ANTHROPIC_API_KEY"];
+        const key = resolveKey(server.config.root);
         if (!key) {
           res.statusCode = 503;
           res.setHeader("content-type", "application/json");
@@ -32,7 +56,9 @@ function aiDevEndpoint(): Plugin {
             JSON.stringify({
               error: "no_api_key",
               message:
-                "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add a key, or use the example lab.",
+                "ANTHROPIC_API_KEY is empty. Paste your key into apps/web/.env after " +
+                "ANTHROPIC_API_KEY= and reload this page — no restart needed. " +
+                "Meanwhile the nodes below all work without a key.",
             }),
           );
           return;
@@ -108,8 +134,22 @@ function aiDevEndpoint(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), aiDevEndpoint()],
+export default defineConfig(({ mode }) => {
+  /**
+   * Read .env on the NODE side.
+   *
+   * Vite only injects `VITE_`-prefixed vars, and only into the client bundle — so
+   * `process.env.ANTHROPIC_API_KEY` is undefined in this file even with a .env present. That is
+   * why the key needs `loadEnv`, and why it is passed to the plugin explicitly rather than read
+   * from `process.env` inside it. The third argument "" disables the prefix filter; the key
+   * stays on this side and is never exposed to the browser.
+   */
+  const env = loadEnv(mode, process.cwd(), "");
+  const apiKey = env["ANTHROPIC_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "";
+
+  return {
+  plugins: [react(), aiDevEndpoint(apiKey)],
   server: { port: 5173 },
   build: { target: "es2022", sourcemap: true },
+  };
 });

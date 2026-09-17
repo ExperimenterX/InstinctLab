@@ -1,6 +1,6 @@
 import { compileExpr, tryCompile } from "../src/expr/compile.js";
 import { parseLabSpec, extractJson } from "../src/spec/parse.js";
-import { FUNCTION_PLOT_FIXTURE } from "../src/canvas/archetypes/function-plot/fixture.js";
+import { FUNCTION_PLOT_FIXTURE } from "../src/canvas/renderers/function-plot/fixture.js";
 
 const EXAMPLE_SPEC = structuredClone(FUNCTION_PLOT_FIXTURE) as any;
 
@@ -90,7 +90,7 @@ ok("rejects unknown name in expression", !parseLabSpec(JSON.stringify(badExpr)).
 // validation to the node rather than knowing about series itself.
 console.log("\n== node model ==");
 const unknownNode = structuredClone(EXAMPLE_SPEC) as any;
-unknownNode.stage.archetype = "does-not-exist";
+unknownNode.stage.renderer = "does-not-exist";
 ok("rejects an unregistered archetype", !parseLabSpec(JSON.stringify(unknownNode)).ok);
 
 const badCfg = structuredClone(EXAMPLE_SPEC) as any;

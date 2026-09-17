@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild test/smoke.ts --bundle --format=esm --platform=node --target=node20 --outfile=node_modules/.cache/smoke.mjs --log-level=error && node node_modules/.cache/smoke.mjs"
+    "test": "node scripts/test.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

@@ -41,7 +41,7 @@ export const FUNCTION_PLOT_FIXTURE = {
     },
   ],
   stage: {
-    archetype: "function-plot",
+    renderer: "function-plot",
     config: {
       x_label: "Hours",
       y_label: "Population",

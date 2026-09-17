@@ -1,7 +1,7 @@
 import type { LabSpec } from "../spec/schema.js";
 import { compileExpr, type Compiled as ExprFn, type Scope } from "../expr/compile.js";
-import { getNode } from "./registry.js";
-import type { ArchetypeNode, CompiledStage, RenderCtx } from "./types.js";
+import { getRenderer } from "./registry.js";
+import type { CanvasRenderer, CompiledStage, RenderCtx } from "./types.js";
 import { getTheme, type Mode } from "./theme.js";
 
 /**
@@ -12,7 +12,7 @@ import { getTheme, type Mode } from "./theme.js";
  * node. That is the whole parallelism story.
  */
 export interface Stage {
-  node: ArchetypeNode<never>;
+  node: CanvasRenderer<never>;
   compiled: CompiledStage;
   /** Observables are shared across nodes, so they live here rather than in a node. */
   observables: { id: string; fn: ExprFn }[];
@@ -21,8 +21,8 @@ export interface Stage {
 }
 
 export function compileStage(spec: LabSpec): Stage {
-  const node = getNode(spec.stage.archetype);
-  if (!node) throw new Error(`No canvas node registered for "${spec.stage.archetype}"`);
+  const node = getRenderer(spec.stage.renderer);
+  if (!node) throw new Error(`No canvas renderer registered for "${spec.stage.renderer}"`);
 
   const paramIds = spec.params.map((p) => p.id);
   const scope: Scope = {};
@@ -35,7 +35,9 @@ export function compileStage(spec: LabSpec): Stage {
     compiled: node.compile(spec.stage.config as never, { paramIds }),
     observables: spec.observables.map((o) => ({
       id: o.id,
-      fn: compileExpr(o.expr, { variables: paramIds }).fn,
+      fn: compileExpr(o.expr, {
+        variables: [...paramIds, ...(node.derivedNames?.(spec.stage.config as never) ?? [])],
+      }).fn,
     })),
   };
 }
@@ -71,6 +73,10 @@ export function readObservables(
   params: Readonly<Record<string, number>>,
 ): Record<string, number> {
   for (const k in params) stage.scope[k] = params[k]!;
+  // Structure-derived values (tree height, nodes read, …) join the scope so a read-out can report
+  // what the renderer actually built rather than an approximation of it.
+  const d = stage.node.derive?.(stage.spec.stage.config as never, params);
+  if (d) for (const k in d) stage.scope[k] = d[k]!;
   const out: Record<string, number> = {};
   for (const o of stage.observables) {
     const v = o.fn(stage.scope);

@@ -51,7 +51,7 @@ export type QuizItem = z.infer<typeof QuizItemSchema>;
 
 /** Which node renders this lab, plus that node's own config. */
 export const StageSchema = z.object({
-  archetype: z.string().min(1).max(40),
+  renderer: z.string().min(1).max(40),
   config: z.unknown(),
 });
 export type Stage = z.infer<typeof StageSchema>;

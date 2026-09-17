@@ -7,7 +7,7 @@
  */
 import { renderToString } from "react-dom/server";
 import { compileStage, drawStage, observableRange, readObservables } from "../src/canvas/stage.js";
-import { FUNCTION_PLOT_FIXTURE } from "../src/canvas/archetypes/function-plot/fixture.js";
+import { FUNCTION_PLOT_FIXTURE } from "../src/canvas/renderers/function-plot/fixture.js";
 import { parseLabSpec } from "../src/spec/parse.js";
 
 const _p = parseLabSpec(JSON.stringify(FUNCTION_PLOT_FIXTURE));

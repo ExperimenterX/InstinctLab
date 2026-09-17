@@ -4,8 +4,8 @@ import type { Theme } from "./theme.js";
 /**
  * THE SEAM.
  *
- * Every canvas archetype is a "node": a self-contained folder implementing this interface. Nodes
- * do not import each other and never touch shared files, so three people can build three nodes
+ * A CANVAS RENDERER compiles a lab spec into pixels. Renderers are self-contained folders that
+ * do not import each other and never touch shared files, so renderers can be built
  * in parallel with no coordination beyond this file.
  *
  * A node owns four things:
@@ -15,7 +15,7 @@ import type { Theme } from "./theme.js";
  *   fixture.ts   a complete example lab, so the node runs standalone at /node/<id>
  *
  * The fixture is not a test convenience. It is how a node gets "spun up" on its own, before the
- * generator knows the archetype exists and without waiting on anyone else's work.
+ * generator knows the renderer exists and without waiting on anyone else's work.
  */
 
 /** Passed to `draw` every frame. Nothing here is allocated per frame by the caller. */
@@ -37,7 +37,7 @@ export interface RenderCtx {
 
 /** Opaque per-node compile output. Each node casts this to its own private type. */
 export interface CompiledStage {
-  readonly archetype: string;
+  readonly renderer: string;
 }
 
 export interface Hit {
@@ -46,11 +46,11 @@ export interface Hit {
   value?: number;
 }
 
-export interface ArchetypeNode<Cfg = unknown> {
+export interface CanvasRenderer<Cfg = unknown> {
   id: string;
   /** Shown in the node gallery. */
   label: string;
-  /** One line for the AI's archetype menu — what kind of concept this grammar fits. */
+  /** One line for the AI's renderer menu — what kind of concept this grammar fits. */
   bestFor: string;
 
   /**
@@ -81,6 +81,19 @@ export interface ArchetypeNode<Cfg = unknown> {
    * there is no lab.
    */
   analyze(cfg: Cfg, ctx: CompileCtx): NodeAnalysis;
+
+  /**
+   * Names this renderer contributes to the observable-expression scope, on top of the params.
+   *
+   * Needed because expressions are arithmetic and cannot run an algorithm. A structural renderer
+   * builds a real data structure, so only it knows the structure's height or node count — and if
+   * the spec had to approximate those with a formula, the read-out would contradict the picture.
+   * (It did: an analytic B-tree height said 4 where the drawn tree was 6 levels deep.)
+   */
+  derivedNames?(cfg: Cfg): string[];
+
+  /** Values for `derivedNames`, at the given knob positions. Must be cheap — called at ~10Hz. */
+  derive?(cfg: Cfg, params: Readonly<Record<string, number>>): Record<string, number>;
 
   /** A complete lab using this node, so it can run standalone at /node/<id>. */
   fixtureJson: unknown;

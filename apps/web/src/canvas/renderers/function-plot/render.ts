@@ -3,7 +3,7 @@ import {
   clearSurface, drawAxes, polyline, seriesLabel, themeDim, valueMarker, withFrameClip,
 } from "../../primitives.js";
 import { seriesColor } from "../../theme.js";
-import { frameOf, type ArchetypeNode, type CompileCtx, type CompiledStage, type NodeAnalysis, type RenderCtx } from "../../types.js";
+import { frameOf, type CanvasRenderer, type CompileCtx, type CompiledStage, type NodeAnalysis, type RenderCtx } from "../../types.js";
 import { FunctionPlotConfigSchema, type FunctionPlotConfig } from "./schema.js";
 import { FUNCTION_PLOT_FIXTURE } from "./fixture.js";
 
@@ -23,7 +23,7 @@ import { FUNCTION_PLOT_FIXTURE } from "./fixture.js";
 const SAMPLES = 260;
 
 interface FPCompiled extends CompiledStage {
-  readonly archetype: "function-plot";
+  readonly renderer: "function-plot";
   cfg: FunctionPlotConfig;
   series: {
     label: string;
@@ -36,7 +36,7 @@ interface FPCompiled extends CompiledStage {
   scope: Scope;
 }
 
-export const functionPlotNode: ArchetypeNode<FunctionPlotConfig> = {
+export const functionPlotRenderer: CanvasRenderer<FunctionPlotConfig> = {
   id: "function-plot",
   label: "Function plot",
   bestFor:
@@ -75,7 +75,7 @@ export const functionPlotNode: ArchetypeNode<FunctionPlotConfig> = {
     for (const id of ctx.paramIds) scope[id] = 0;
 
     return {
-      archetype: "function-plot",
+      renderer: "function-plot",
       cfg,
       scope,
       series: cfg.series.map((s) => ({

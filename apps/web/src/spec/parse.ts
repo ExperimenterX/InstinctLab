@@ -1,6 +1,6 @@
 import { LabSpecSchema, type LabSpec } from "./schema.js";
 import { tryCompile } from "../expr/compile.js";
-import { getNode, nodeIds } from "../canvas/registry.js";
+import { getRenderer, rendererIds } from "../canvas/registry.js";
 
 /**
  * AI response → validated LabSpec.
@@ -95,6 +95,8 @@ export function parseLabSpec(raw: string): ParseResult {
   const errors: ParseIssue[] = [];
   const warnings: ParseIssue[] = [];
   const repairs: string[] = [];
+  let derived: string[] = [];
+  let usesDerived = false;
 
   // — params —
   const paramIds = spec.params.map((p) => p.id);
@@ -122,19 +124,13 @@ export function parseLabSpec(raw: string): ParseResult {
 
   const referencedParams = new Set<string>();
 
-  // — observables (shared: param ids only, no x) —
-  for (const [i, o] of spec.observables.entries()) {
-    const r = tryCompile(o.expr, paramIds);
-    if (!r.ok) errors.push({ path: `observables.${i}.expr`, message: r.error, severity: "error" });
-    else for (const n of r.result.referenced) referencedParams.add(n);
-  }
-
-  // — Layer 3: the node validates its own config —
-  const node = getNode(spec.stage.archetype);
+  // — Layer 3: the renderer validates its own config —
+  // Done before observables, because the renderer declares extra names they may reference.
+  const node = getRenderer(spec.stage.renderer);
   if (!node) {
     errors.push({
-      path: "stage.archetype",
-      message: `Unknown archetype "${spec.stage.archetype}". Available: ${nodeIds().join(", ")}`,
+      path: "stage.renderer",
+      message: `Unknown renderer "${spec.stage.renderer}". Available: ${rendererIds().join(", ")}`,
       severity: "error",
     });
   } else {
@@ -153,11 +149,25 @@ export function parseLabSpec(raw: string): ParseResult {
       for (const m of a.errors) errors.push({ path: "stage.config", message: m, severity: "error" });
       for (const m of a.warnings) warnings.push({ path: "stage.config", message: m, severity: "warning" });
       for (const n of a.referencedParams) referencedParams.add(n);
+      derived = node.derivedNames?.(cfg.data as never) ?? [];
+    }
+  }
+
+  // — observables: param ids plus anything the renderer derives —
+  for (const [i, o] of spec.observables.entries()) {
+    const r = tryCompile(o.expr, [...paramIds, ...derived]);
+    if (!r.ok) errors.push({ path: `observables.${i}.expr`, message: r.error, severity: "error" });
+    else {
+      for (const n of r.result.referenced) {
+        // A derived name counts as depending on the structure, hence on the knobs that shape it.
+        if (paramIds.includes(n)) referencedParams.add(n);
+        else usesDerived = true;
+      }
     }
   }
 
   // — Layer 4: THE RULE THAT MAKES IT A LAB —
-  if (referencedParams.size === 0) {
+  if (referencedParams.size === 0 && !usesDerived) {
     errors.push({
       path: "stage/observables",
       message:
@@ -166,13 +176,17 @@ export function parseLabSpec(raw: string): ParseResult {
       severity: "error",
     });
   }
-  for (const p of spec.params) {
-    if (!referencedParams.has(p.id)) {
-      warnings.push({
-        path: `params.${p.id}`,
-        message: `"${p.label}" is never used — that knob is inert.`,
-        severity: "warning",
-      });
+  // Skipped when read-outs are structure-derived: the renderer consumes those params itself, so
+  // "unreferenced by an expression" does not mean inert.
+  if (!usesDerived) {
+    for (const p of spec.params) {
+      if (!referencedParams.has(p.id)) {
+        warnings.push({
+          path: `params.${p.id}`,
+          message: `"${p.label}" is never used — that knob is inert.`,
+          severity: "warning",
+        });
+      }
     }
   }
 

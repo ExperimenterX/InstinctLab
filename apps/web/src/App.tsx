@@ -2,9 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { compileStage } from "./canvas/stage.js";
 import { getTheme, prefersDark, type Mode } from "./canvas/theme.js";
 import { generateLab } from "./ai/generate.js";
-import { FUNCTION_PLOT_FIXTURE } from "./canvas/archetypes/function-plot/fixture.js";
 import { formatIssues, parseLabSpec } from "./spec/parse.js";
-import { NODES } from "./canvas/registry.js";
+import { CONCEPTS, getConcept } from "./concepts/index.js";
 import { LabSpecSchema, type LabSpec } from "./spec/schema.js";
 import { clearSession, createLabStore, loadSession, saveSession } from "./state/labStore.js";
 import { LabCanvas } from "./components/LabCanvas.js";
@@ -32,15 +31,15 @@ export function App() {
   useEffect(() => {
     const m = /^\/node\/([a-z0-9-]+)$/.exec(window.location.pathname);
     if (!m) return;
-    const node = NODES.find((n) => n.id === m[1]);
+    const node = getConcept(m[1]!);
     if (!node) return;
-    const res = parseLabSpec(JSON.stringify(node.fixtureJson));
+    // Hand-authored node specs go through the same parser as model output — no exceptions.
+    const res = parseLabSpec(JSON.stringify(node.spec));
     if (res.ok) {
       setSpec(res.spec);
-      setConcept(`node: ${node.id}`);
+      setConcept(node.title);
     } else {
-      // A fixture that drifted out of schema should say so loudly — it is the node's own test.
-      console.error(`[node:${node.id}] fixture does not validate`, res.issues);
+      console.error(`[node:${node.id}] spec does not validate`, res.issues);
     }
   }, []);
 
@@ -188,16 +187,16 @@ function ConceptScreen({ onStart }: { onStart: (spec: LabSpec, concept: string) 
         <p className="hint">Designing the simulation. This takes a few seconds.</p>
       ) : (
         <button className="btn-ghost example-link" onClick={() => openExample(onStart, setProblem)}>
-          or open the example lab →
+          or open a node below →
         </button>
       )}
 
-      {NODES.length > 0 ? (
-        <nav className="node-gallery" aria-label="Canvas nodes">
-          <span>canvas nodes:</span>
-          {NODES.map((n) => (
-            <a key={n.id} href={`/node/${n.id}`} title={n.bestFor}>
-              {n.label}
+      {CONCEPTS.length > 0 ? (
+        <nav className="node-gallery" aria-label="Concept nodes">
+          <span>nodes:</span>
+          {CONCEPTS.map((n) => (
+            <a key={n.id} href={`/node/${n.id}`} title={n.summary}>
+              {n.title}
             </a>
           ))}
         </nav>
@@ -228,9 +227,10 @@ function openExample(
   onStart: (spec: LabSpec, concept: string) => void,
   setProblem: (p: { title: string; detail: string }) => void,
 ): void {
-  const res = parseLabSpec(JSON.stringify(FUNCTION_PLOT_FIXTURE));
-  if (res.ok) onStart(res.spec, FUNCTION_PLOT_FIXTURE.title.toLowerCase());
-  else setProblem({ title: "The bundled example is out of schema.", detail: formatIssues(res.issues) });
+  const first = CONCEPTS[0]!;
+  const res = parseLabSpec(JSON.stringify(first.spec));
+  if (res.ok) onStart(res.spec, first.title);
+  else setProblem({ title: "The bundled node is out of schema.", detail: formatIssues(res.issues) });
 }
 
 // ── Screen 2: the lab ─────────────────────────────────────────────────────────────────────────
