@@ -1,6 +1,8 @@
 import type { CanvasRenderer } from "./types.js";
 import { functionPlotRenderer } from "./renderers/function-plot/render.js";
 import { structureDiagramRenderer } from "./renderers/structure-diagram/render.js";
+import { marketTapeRenderer } from "./renderers/market-tape/render.js";
+import { depthLadderRenderer } from "./renderers/depth-ladder/render.js";
 
 /**
  * The canvas renderer registry.
@@ -18,6 +20,8 @@ import { structureDiagramRenderer } from "./renderers/structure-diagram/render.j
 export const RENDERERS: readonly CanvasRenderer<never>[] = [
   functionPlotRenderer as unknown as CanvasRenderer<never>,
   structureDiagramRenderer as unknown as CanvasRenderer<never>,
+  marketTapeRenderer as unknown as CanvasRenderer<never>,
+  depthLadderRenderer as unknown as CanvasRenderer<never>,
   // grid-automaton      → person A
   // particle-field      → person A
   // layered-stack       → person A

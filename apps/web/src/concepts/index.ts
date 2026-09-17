@@ -2,6 +2,8 @@ import type { ConceptNode } from "./types.js";
 import { carryingCapacityNode } from "./carrying-capacity/node.js";
 import { linkedListNode } from "./linked-list/node.js";
 import { bTreeNode } from "./b-tree/node.js";
+import { stopLossNode } from "./stop-loss/node.js";
+import { orderBookNode } from "./order-book/node.js";
 
 /**
  * The concept-node registry.
@@ -11,12 +13,15 @@ import { bTreeNode } from "./b-tree/node.js";
  * other, so people can add them in parallel.
  *
  * Renderers live in src/canvas/renderers and are shared: `linked-list` and `b-tree` both use
- * `structure-diagram`. A node picks a renderer; it does not write drawing code.
+ * `structure-diagram`, while `stop-loss` uses `market-tape` and `order-book` uses `depth-ladder`. A node picks a renderer; it does
+ * not write drawing code.
  */
 export const CONCEPTS: readonly ConceptNode[] = [
   carryingCapacityNode,
   linkedListNode,
   bTreeNode,
+  stopLossNode,
+  orderBookNode,
 ];
 
 const BY_ID = new Map(CONCEPTS.map((c) => [c.id, c] as const));
